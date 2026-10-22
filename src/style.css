@@ -471,6 +471,21 @@ kbd {
   display: none;
 }
 
+body.no-webgpu > :not(.unsupported) {
+  display: none;
+}
+
+.unsupported p {
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.unsupported .unsupported-detail {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .unsupported h2 {
   font-size: 17px;
   margin-bottom: 8px;

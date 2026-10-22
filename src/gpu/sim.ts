@@ -25,8 +25,6 @@ const SPONGE_FRACTION = 0.08;
 const SPONGE_TAU = 1.2;
 const LAYER_STRENGTH = 0.05;
 
-const usage = GPUBufferUsage;
-
 export class Simulation {
   readonly device: GPUDevice;
   readonly nx: number;
@@ -88,6 +86,9 @@ export class Simulation {
     this.settings = settings;
     this.particleCount = Math.round(this.n / 14);
     const n = this.n;
+    // Read here, not at module scope: browsers without WebGPU lack the global,
+    // and the import must still succeed so main.ts can say so.
+    const usage = GPUBufferUsage;
 
     const storage = (bytes: number, extra = 0) =>
       device.createBuffer({ size: bytes, usage: usage.STORAGE | usage.COPY_DST | usage.COPY_SRC | extra });

@@ -42,9 +42,13 @@ const download = (name: string, blob: Blob) => {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
 
+// Replaces the page with the WebGPU message; `reason` adds the specific cause.
 const fail = (reason?: string) => {
   $('unsupported').hidden = false;
-  if (reason) $('unsupported-reason').textContent = reason;
+  document.body.classList.add('no-webgpu');
+  const detail = $('unsupported-reason');
+  detail.hidden = !reason;
+  if (reason) detail.textContent = reason;
 };
 
 const pickGridWidth = (params: URLSearchParams) => {
