@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aeolus</title>
+    <meta name="description" content="A real-time GPU wind tunnel: lattice Boltzmann CFD with LES turbulence modelling, in WebGPU." />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <div class="brand">
+        <h1>Aeolus</h1>
+        <span>lattice Boltzmann wind tunnel</span>
+      </div>
+      <label class="scene-pick">
+        <span class="visually-hidden">Scene</span>
+        <select id="scene-select"></select>
+      </label>
+      <div class="transport">
+        <button id="btn-play" title="Pause or resume (Space)">Pause</button>
+        <button id="btn-reset" title="Restart the flow from a uniform stream (R)">Reset</button>
+        <button id="btn-shot" title="Save a PNG of the tunnel (S)">Screenshot</button>
+      </div>
+    </header>
+
+    <main class="stage">
+      <div class="viewport" id="viewport">
+        <canvas id="sim"></canvas>
+        <canvas id="overlay"></canvas>
+        <div class="flow-arrow" aria-hidden="true">U →</div>
+      </div>
+      <div class="statusbar">
+        <span>Re <b id="s-re">–</b></span>
+        <span>Ma <b id="s-ma">–</b></span>
+        <span>τ <b id="s-tau">–</b></span>
+        <span>t* <b id="s-time">0</b></span>
+        <span>grid <b id="s-grid">–</b></span>
+        <span><b id="s-mlups">–</b> MLUPS</span>
+        <span id="s-state" class="state"></span>
+        <span class="legend">
+          <span id="legend-label"></span>
+          <span id="legend-min"></span>
+          <span class="legend-bar" id="legend-bar"></span>
+          <span id="legend-max"></span>
+        </span>
+      </div>
+    </main>
+
+    <div class="deck">
+      <section class="panel">
+        <h2 id="scene-name">Scene</h2>
+        <p class="blurb" id="blurb"></p>
+        <div class="controls" id="scene-controls"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Flow</h2>
+        <div class="controls">
+          <label class="field">
+            <span>Reynolds number <output id="out-re"></output></span>
+            <input id="in-re" type="range" min="0" max="1000" step="1" />
+          </label>
+          <label class="field">
+            <span>Mach number <output id="out-ma"></output></span>
+            <input id="in-ma" type="range" min="0.05" max="0.3" step="0.01" value="0.17" />
+          </label>
+          <label class="field">
+            <span>Steps per frame <output id="out-steps"></output></span>
+            <input id="in-steps" type="range" min="1" max="64" step="1" value="12" />
+          </label>
+          <div class="field row">
+            <span>Tunnel walls</span>
+            <div class="segmented" id="walls">
+              <button data-value="slip" title="Free-slip: specular reflection">Slip</button>
+              <button data-value="noslip" title="No-slip: bounce-back">No-slip</button>
+            </div>
+          </div>
+          <label class="field row check">
+            <span>Smagorinsky LES</span>
+            <input id="in-les" type="checkbox" checked />
+          </label>
+          <p class="note" id="flow-note"></p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Display</h2>
+        <div class="controls">
+          <div class="segmented wrap" id="views">
+            <button data-value="smoke" title="Smoke streaklines (1)">Smoke</button>
+            <button data-value="vorticity" title="Vorticity ω (2)">Vorticity</button>
+            <button data-value="speed" title="Speed |u| / U (3)">Speed</button>
+            <button data-value="pressure" title="Pressure coefficient Cp (4)">Pressure</button>
+            <button data-value="streamlines" title="Line integral convolution (5)">Streamlines</button>
+          </div>
+          <label class="field">
+            <span>Contrast <output id="out-contrast"></output></span>
+            <input id="in-contrast" type="range" min="-1.5" max="1.5" step="0.05" value="0" />
+          </label>
+          <label class="field row check">
+            <span>Tracer particles</span>
+            <input id="in-tracers" type="checkbox" />
+          </label>
+          <div class="field row">
+            <span>Tool</span>
+            <div class="segmented" id="tools">
+              <button data-value="move" title="Drag the body (M)">Move</button>
+              <button data-value="draw" title="Paint solid walls (D)">Draw</button>
+              <button data-value="erase" title="Erase walls (E)">Erase</button>
+            </div>
+          </div>
+          <label class="field">
+            <span>Brush <output id="out-brush"></output></span>
+            <input id="in-brush" type="range" min="1" max="30" step="1" value="5" />
+          </label>
+          <button id="btn-clear" class="quiet" title="C">Clear drawing</button>
+        </div>
+      </section>
+
+      <section class="panel forces">
+        <h2>Forces</h2>
+        <dl class="readouts">
+          <div><dt>C<sub>D</sub></dt><dd id="r-cd">–</dd></div>
+          <div><dt>C<sub>L</sub></dt><dd id="r-cl">–</dd></div>
+          <div><dt>C<sub>L</sub>′ rms</dt><dd id="r-clrms">–</dd></div>
+          <div><dt>St</dt><dd id="r-st">–</dd></div>
+          <div><dt>L/D</dt><dd id="r-ld">–</dd></div>
+          <div id="r-extra-wrap" hidden><dt id="r-extra-label"></dt><dd id="r-extra">–</dd></div>
+        </dl>
+        <canvas class="chart" id="chart-forces"></canvas>
+        <p class="note" id="ref-note"></p>
+        <button id="btn-csv-forces" class="quiet">Export history CSV</button>
+      </section>
+
+      <section class="panel study" id="panel-study">
+        <h2 id="study-title">Sweep</h2>
+        <div class="study-config">
+          <label>from <input id="in-sweep-from" type="number" step="any" /></label>
+          <label>to <input id="in-sweep-to" type="number" step="any" /></label>
+          <label>step <input id="in-sweep-step" type="number" step="any" min="0" /></label>
+        </div>
+        <div class="study-actions">
+          <button id="btn-sweep">Run sweep</button>
+          <button id="btn-csv-sweep" class="quiet" disabled>CSV</button>
+          <span class="progress" id="sweep-progress"></span>
+        </div>
+        <canvas class="chart" id="chart-sweep"></canvas>
+        <p class="note" id="sweep-note"></p>
+      </section>
+    </div>
+
+    <details class="method">
+      <summary>Method</summary>
+      <div class="method-body">
+        <p>
+          The air is modelled as a lattice gas. Every grid cell carries nine particle populations
+          <i>f<sub>i</sub></i>, one per lattice velocity of the D2Q9 stencil. Each time step they stream to the
+          neighbouring cell and then relax towards a local Maxwell–Boltzmann equilibrium (BGK collision).
+          Density and velocity are moments of the populations, and in the limit of small Mach number this
+          reproduces the Navier–Stokes equations, with viscosity ν = (τ − ½)/3 set by the relaxation time τ.
+        </p>
+        <p>
+          At high Reynolds numbers τ approaches ½ and plain BGK blows up, so a Smagorinsky large-eddy model adds
+          eddy viscosity where the strain is large. The strain comes locally from the non-equilibrium stress, so
+          no finite differences are needed. Bodies use halfway bounce-back, with a moving-wall correction for the
+          spinning cylinder. Forces come from momentum exchange: every population that hits a solid gives the body
+          twice its momentum.
+        </p>
+        <p>
+          The inlet holds a uniform stream. The outlet is zero-gradient, with a sponge of extra viscosity in the
+          last 8% of the tunnel so vortices leave quietly. The walls are free-slip by default (an open test section)
+          or no-slip for channel flows. Smoke is a passive scalar advected with a MacCormack scheme; tracers are
+          advected with second-order Runge–Kutta. Everything runs in WebGPU compute shaders; the browser only
+          reads back force sums.
+        </p>
+        <p>
+          Everything is in lattice units. Re = U L / ν uses the scene's reference length (chord, diameter or step
+          height in cells), coefficients are per unit span, and t* = t U / L counts convective times. Results are
+          2D and laminar-to-transitional; expect the right trends and orders of magnitude rather than wind-tunnel
+          numbers, and note that the tunnel walls add blockage.
+        </p>
+      </div>
+    </details>
+
+    <footer class="keys">
+      <span><kbd>Space</kbd> pause</span>
+      <span><kbd>R</kbd> reset</span>
+      <span><kbd>1</kbd>–<kbd>5</kbd> view</span>
+      <span><kbd>M</kbd> <kbd>D</kbd> <kbd>E</kbd> tools</span>
+      <span><kbd>T</kbd> tracers</span>
+      <span><kbd>C</kbd> clear drawing</span>
+      <span><kbd>↑</kbd> <kbd>↓</kbd> angle / spin</span>
+      <span><kbd>S</kbd> screenshot</span>
+      <a href="https://github.com/ylfeid/aeolus">Source</a>
+    </footer>
+
+    <div class="unsupported" id="unsupported" hidden>
+      <div>
+        <h2>WebGPU isn't available</h2>
+        <p id="unsupported-reason">
+          Aeolus needs a browser with WebGPU: a recent Chrome or Edge, Safari 26+, or a recent Firefox.
+        </p>
+      </div>
+    </div>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
