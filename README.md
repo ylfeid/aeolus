@@ -98,8 +98,11 @@ All quantities are in lattice units. Coefficients are per unit span and t* = tU/
 
 | Path | Contents |
 | --- | --- |
+| `src/core/lattice-core.ts` | The GPU lattice: distribution and obstacle buffers, parameters, stepping, force readback |
+| `src/gpu/sim.ts` | The interactive tunnel on top of the core: fields, smoke, tracers, row readback |
 | `src/shaders/lbm.wgsl` | Streaming, boundaries, collision, LES, sponge |
-| `src/shaders/fields.wgsl` | Macroscopic fields and the momentum-exchange force reduction |
+| `src/shaders/force.wgsl` | Momentum-exchange force reduction |
+| `src/shaders/fields.wgsl` | Macroscopic fields |
 | `src/shaders/transport.wgsl` | Smoke (MacCormack) and tracer advection |
 | `src/shaders/render.wgsl` | Field colouring, LIC, tracer dots |
 | `src/physics/lattice.ts` | D2Q9 constants and a CPU reference solver that mirrors the shader |
